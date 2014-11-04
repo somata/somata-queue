@@ -4,12 +4,11 @@ _ = require 'underscore'
 crypto = require 'crypto'
 
 DEFAULT_JOB_COMPLETED_PREFIX = 'completed:'
-DEFAULT_JOB_LIMIT = 2
+DEFAULT_JOB_LIMIT = 5
 DEFAULT_JOB_INTERVAL = 1000
-PRIORITIES =
-    high: 5
-    normal: 3
-    low: 1
+
+PRIORITY_NAMES = ['low', 'normal', 'high']
+PRIORITIES = _.object PRIORITY_NAMES.map (n, i) -> [n, i]
 
 # Filtering and sorting helpers
 isRunning = (job) -> job.running
@@ -23,28 +22,34 @@ class QueueService extends somata.Service
 
     constructor: ->
         super
-        @client = new somata.Client parent: @
+        @client_options ||= {}
+        _.extend @client_options, {parent: @}
+        @client = new somata.Client @client_options
 
         @job_limit ||= DEFAULT_JOB_LIMIT
         @job_check_interval ||= DEFAULT_JOB_INTERVAL
         @job_completed_prefix ||= DEFAULT_JOB_COMPLETED_PREFIX
         @queued_jobs = {}
 
+        @rpc_binding.on 'queue', @handleQueue.bind(@)
         @startRunningJobs()
 
     # Override handleMethod to interpret the given method name as a queue priority
     handleMethod: (client_id, message) ->
-        somata.log.i "<#{ client_id }> #{ message.args[0] }.#{ message.args[1] }(#{ message.args.slice(2).join(', ') })"
-        @queue client_id, message, message.method
+        if message.method in PRIORITY_NAMES
+            somata.log.i "<#{ client_id }> #{ message.args[0] }.#{ message.args[1] }(#{ message.args.slice(2).join(', ') })"
+            @queue client_id, message, message.method
+        else
+            super
 
     # Add a job to the queue
-    queue: (client_id, message, priority='normal') ->
+    handleQueue: (client_id, message) ->
         job =
             message_id: message.id
             client_id: client_id
-            priority: priority
-            service: message.args.shift(0)
-            method: message.args.shift(0)
+            priority: message.priority
+            service: message.service
+            method: message.method
             args: message.args
             scheduled: new Date()
         job.key = makeKeyForJob job
@@ -76,8 +81,11 @@ class QueueService extends somata.Service
         somata.log.s '[runJob] Running ' + util.inspect job, colors: true
         job.running = true
         @client.remote job.service, job.method, job.args..., (err, response) =>
-            @sendQueueResponse job, response
-            delete @queued_jobs[job.key]
+            if err? && err.timeout
+                @runJob job
+            else
+                @sendQueueResponse job, response
+                delete @queued_jobs[job.key]
 
     # Send a successful queue response
     sendQueueResponse: (job, response) ->
