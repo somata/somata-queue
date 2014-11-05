@@ -31,33 +31,33 @@ class QueueService extends somata.Service
         @job_completed_prefix ||= DEFAULT_JOB_COMPLETED_PREFIX
         @queued_jobs = {}
 
-        @rpc_binding.on 'queue', @handleQueue.bind(@)
         @startRunningJobs()
 
     # Override handleMethod to interpret the given method name as a queue priority
     handleMethod: (client_id, message) ->
-        if message.method in PRIORITY_NAMES
-            somata.log.i "<#{ client_id }> #{ message.args[0] }.#{ message.args[1] }(#{ message.args.slice(2).join(', ') })"
-            @queue client_id, message, message.method
+        if message.method == 'queue'
+            job = @makeJob client_id, message
+            @queue client_id, job
+            @afterQueue job if @afterQueue?
         else
             super
 
-    # Add a job to the queue
-    handleQueue: (client_id, message) ->
+    makeJob: (client_id, message) ->
         job =
             message_id: message.id
             client_id: client_id
-            priority: message.priority
-            service: message.service
-            method: message.method
-            args: message.args
+            priority: message.args[0]
+            service: message.args[1]
+            method: message.args[2]
+            args: message.args[3..]
             scheduled: new Date()
         job.key = makeKeyForJob job
+        return job
+
+    # Add a job to the queue
+    queue: (client_id, job) ->
         if !@queued_jobs[job.key]?
             @queued_jobs[job.key] = job
-            @sendResponse job.client_id, message.id, success: true, new: true, job: job
-        else
-            @sendResponse job.client_id, message.id, success: true, new: false, job: job
 
     # Check jobs at an interval
     startRunningJobs: ->
@@ -89,7 +89,7 @@ class QueueService extends somata.Service
 
     # Send a successful queue response
     sendQueueResponse: (job, response) ->
-        @publish @job_completed_prefix + job.key, response
+        @sendResponse job.client_id, job.message_id, response
 
     # TODO: Keep track of worker services and reschedule jobs if they fail
 
