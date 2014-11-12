@@ -4,8 +4,8 @@ _ = require 'underscore'
 crypto = require 'crypto'
 
 DEFAULT_JOB_COMPLETED_PREFIX = 'completed:'
-DEFAULT_JOB_LIMIT = 5
-DEFAULT_JOB_INTERVAL = 1000
+DEFAULT_JOB_LIMIT = parseInt(process.env.SOMATA_JOB_LIMIT) || 5
+DEFAULT_JOB_INTERVAL = parseInt(process.env.SOMATA_JOB_INTERVAL) || 1000
 
 PRIORITY_NAMES = ['low', 'normal', 'high']
 PRIORITIES = _.object PRIORITY_NAMES.map (n, i) -> [n, i]
@@ -27,7 +27,7 @@ class QueueService extends somata.Service
         @client = new somata.Client @client_options
 
         @job_limit ||= DEFAULT_JOB_LIMIT
-        @job_check_interval ||= DEFAULT_JOB_INTERVAL
+        @job_interval ||= DEFAULT_JOB_INTERVAL
         @job_completed_prefix ||= DEFAULT_JOB_COMPLETED_PREFIX
         @queued_jobs = {}
 
@@ -61,7 +61,7 @@ class QueueService extends somata.Service
 
     # Check jobs at an interval
     startRunningJobs: ->
-        setInterval @runJobs.bind(@), @job_check_interval
+        setInterval @runJobs.bind(@), @job_interval
 
     # Check for runnable jobs
     runJobs: ->
@@ -73,14 +73,15 @@ class QueueService extends somata.Service
         n_running = all_jobs.filter(isRunning).length
         runnable_jobs = _.first runnable_jobs, @job_limit - n_running
         # Run them
-        somata.log.d "[runJobs] Found #{ runnable_jobs.length } runnable jobs..." if runnable_jobs.length > 0
-        runnable_jobs.map @runJob.bind(@)
+        somata.log.d "[runJobs] Found #{ runnable_jobs.length } runnable jobs from #{ all_jobs.length }..." if runnable_jobs.length > 0
+        #somata.log.w "[runJobs] No runnable jobs..." if runnable_jobs.length == 0
+        run_outgoing_ids = runnable_jobs.map @runJob.bind(@)
 
     # Run a job and forward the result to the requesting client
     runJob: (job) ->
         somata.log.s '[runJob] Running ' + util.inspect job, colors: true
         job.running = true
-        @client.remote job.service, job.method, job.args..., (err, response) =>
+        job.outgoing_id = @client.remote job.service, job.method, job.args..., (err, response) =>
             if err? && err.timeout
                 @runJob job
             else
