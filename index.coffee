@@ -1,7 +1,6 @@
 somata = require 'somata'
 util = require 'util'
 _ = require 'underscore'
-crypto = require 'crypto'
 
 DEFAULT_JOB_COMPLETED_PREFIX = 'completed:'
 DEFAULT_JOB_LIMIT = parseInt(process.env.SOMATA_JOB_LIMIT) || 5
@@ -12,13 +11,22 @@ PRIORITIES = _.object PRIORITY_NAMES.map (n, i) -> [n, i]
 
 # Filtering and sorting helpers
 isRunning = (job) -> job.running
-isRunnable = (job) -> job.scheduled <= new Date() && !isRunning job
+isRunnable = (job) -> job.scheduled <= new Date().getTime() && !isRunning job
 prioritySort = (job) -> -1 * PRIORITIES[job.priority]
-md5 = (s) -> crypto.createHash('md5').update(s).digest('hex')
-makeKeyForJob = (job) -> md5 JSON.stringify(_.pick job, ['service', 'method', 'args'])
+jobSummary = (job) -> _.pick job, ['client_id', 'service', 'method', 'args']
+makeKeyForJob = (job) -> somata.helpers.hashobj jobSummary job
 jobsDeduped = (jobs) -> _.uniq jobs, makeKeyForJob
 
+# Helpers for extending objects
+ex = (o, a...) -> _.extend {}, o, a...
+dx = (o, a...) -> _.defaults (ex o), a...
+
 class QueueService extends somata.Service
+
+    # TODO:
+    # * Persist jobs in Redis or Mongo
+    # * Keep track of worker services and reschedule jobs if they fail
+    # * Send jobs of the same key to newly subscribed hosts without re-queueing
 
     constructor: ->
         super
@@ -36,22 +44,28 @@ class QueueService extends somata.Service
     # Override handleMethod to interpret the given method name as a queue priority
     handleMethod: (client_id, message) ->
         if message.method == 'queue'
-            job = @makeJob client_id, message
-            @queue client_id, job
-            @afterQueue job if @afterQueue?
+            @handleQueue client_id, message
         else
             super
 
+    handleQueue: (client_id, message) ->
+        job = @makeJob client_id, message
+        @queue client_id, job
+        @afterQueue job if @afterQueue?
+
+    # queue [{options}] [service] [method] [args...]
     makeJob: (client_id, message) ->
-        job =
+        options = message.args[0] || {}
+        job = dx options,
+            priority: 'normal'
             message_id: message.id
             client_id: client_id
-            priority: message.args[0]
             service: message.args[1]
             method: message.args[2]
             args: message.args[3..]
-            scheduled: new Date()
+            scheduled: new Date().getTime()
         job.key = makeKeyForJob job
+        somata.log.i '[makeJob]', job
         return job
 
     # Add a job to the queue
@@ -74,16 +88,19 @@ class QueueService extends somata.Service
         runnable_jobs = _.first runnable_jobs, @job_limit - n_running
         # Run them
         somata.log.d "[runJobs] Found #{ runnable_jobs.length } runnable jobs from #{ all_jobs.length }..." if runnable_jobs.length > 0
-        #somata.log.w "[runJobs] No runnable jobs..." if runnable_jobs.length == 0
         run_outgoing_ids = runnable_jobs.map @runJob.bind(@)
 
     # Run a job and forward the result to the requesting client
     runJob: (job) ->
         somata.log.s '[runJob] Running ' + util.inspect job, colors: true
         job.running = true
-        job.outgoing_id = @client.remote job.service, job.method, job.args..., (err, response) =>
+        job.outgoing_id = @client.call job.service, job.method, job.args..., (err, response) =>
+
+            # Re-run it if timed out
+            # TODO: Add it to the end of the queue
             if err? && err.timeout
                 @runJob job
+
             else
                 @sendQueueResponse job, response
                 delete @queued_jobs[job.key]
@@ -91,8 +108,6 @@ class QueueService extends somata.Service
     # Send a successful queue response
     sendQueueResponse: (job, response) ->
         @sendResponse job.client_id, job.message_id, response
-
-    # TODO: Keep track of worker services and reschedule jobs if they fail
 
 module.exports = QueueService
 
