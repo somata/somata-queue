@@ -1,0 +1,32 @@
+doctype html
+html
+    head
+        title queue-ui
+
+        link(rel='stylesheet', href='//cdnjs.cloudflare.com/ajax/libs/font-awesome/4.2.0/css/font-awesome.min.css')
+        link(href='http://fonts.googleapis.com/css?family=Fira+Mono:700,400', rel='stylesheet', type='text/css')
+
+        link(rel='stylesheet', href='/css/base.css')
+
+    body
+        .container
+            #loader
+            #jobs-summary
+            #jobs
+
+    script(src='//cdnjs.cloudflare.com/ajax/libs/jquery/2.1.1/jquery.min.js')
+    script(src='//cdnjs.cloudflare.com/ajax/libs/underscore.js/1.6.0/underscore-min.js')
+    script(src='//cdnjs.cloudflare.com/ajax/libs/backbone.js/1.1.2/backbone-min.js')
+    script(src='//cdnjs.cloudflare.com/ajax/libs/moment.js/2.8.3/moment.min.js')
+    script(src='//cdnjs.cloudflare.com/ajax/libs/react/0.12.0/react-with-addons.js')
+    script(src='//cdnjs.cloudflare.com/ajax/libs/react/0.12.0/JSXTransformer.js')
+    script(src='//cdnjs.cloudflare.com/ajax/libs/bacon.js/0.7.30/Bacon.min.js')
+
+    script(src='/socket.io/socket.io.js')
+    script(src='/js/somata-socketio.js')
+
+    script(src='/js/cortex.js')
+    script(src='/js/helpers.js')
+
+    script(type='text/jsx', src='/js/base.js')
+
