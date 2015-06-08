@@ -65,7 +65,7 @@ class QueueService extends somata.Service
             args: message.args[3..]
             scheduled: new Date().getTime()
         job.key = makeKeyForJob job
-        somata.log.i '[makeJob]', job
+        #somata.log.i '[makeJob]', job
         return job
 
     # Add a job to the queue
@@ -87,12 +87,12 @@ class QueueService extends somata.Service
         n_running = all_jobs.filter(isRunning).length
         runnable_jobs = _.first runnable_jobs, @job_limit - n_running
         # Run them
-        somata.log.d "[runJobs] Found #{ runnable_jobs.length } runnable jobs from #{ all_jobs.length }..." if runnable_jobs.length > 0
+        #somata.log.d "[runJobs] Found #{ runnable_jobs.length } runnable jobs from #{ all_jobs.length }..." if runnable_jobs.length > 0
         run_outgoing_ids = runnable_jobs.map @runJob.bind(@)
 
     # Run a job and forward the result to the requesting client
     runJob: (job) ->
-        somata.log.s '[runJob] Running ' + util.inspect job, colors: true
+        #somata.log.s '[runJob] Running ' + util.inspect job, colors: true
         job.running = true
         job.outgoing_id = @client.call job.service, job.method, job.args..., (err, response) =>
 
