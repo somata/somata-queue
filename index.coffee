@@ -44,6 +44,8 @@ class QueueService extends somata.Service
             @queue client_id, message
         else if message.method == 'queued'
             @queued client_id, message
+        else if message.method == 'cancel'
+            @cancel client_id, message
         else
             super
 
@@ -106,12 +108,27 @@ class QueueService extends somata.Service
                 @sendQueueResponse job, response
                 delete @queued_jobs[job.message_id]
 
-            @client.unsubscribe progress_subscription
+            @client.unsubscribe job.subscription
 
         # Subscribe to progress messages from worker service
-        progress_subscription = @client.subscribe job.service, 'progress:'+job.message_id, (progress) =>
+        job.subscription = @client.subscribe job.service, 'progress:'+job.message_id, (progress) =>
             job.progress = progress
             @publish 'progress:'+job.message_id, progress
+
+    cancel: (client_id, message) ->
+        job_id = message.args[0]
+
+        cb = (err, response) =>
+            @sendResponse client_id, message.id, response
+
+        if job = @queued_jobs[job_id]
+            delete @queued_jobs[job_id]
+            @client.unsubscribe job.subscription
+            @publish 'cancel:'+job.message_id
+            cb null, true
+
+        else
+            cb null, false
 
     # Send a successful queue response
     sendQueueResponse: (job, response) ->
