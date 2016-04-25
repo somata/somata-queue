@@ -14,8 +14,6 @@ isRunning = (job) -> job.running
 isRunnable = (job) -> job.scheduled <= new Date().getTime() && !isRunning job
 prioritySort = (job) -> -1 * PRIORITIES[job.priority]
 jobSummary = (job) -> _.pick job, ['client_id', 'service', 'method', 'args']
-makeKeyForJob = (job) -> somata.helpers.hashobj jobSummary job
-jobsDeduped = (jobs) -> _.uniq jobs, makeKeyForJob
 
 # Helpers for extending objects
 ex = (o, a...) -> _.extend {}, o, a...
@@ -26,7 +24,6 @@ class QueueService extends somata.Service
     # TODO:
     # * Persist jobs in Redis or Mongo
     # * Keep track of worker services and reschedule jobs if they fail
-    # * Send jobs of the same key to newly subscribed hosts without re-queueing
 
     constructor: ->
         super
@@ -41,7 +38,7 @@ class QueueService extends somata.Service
 
         @startRunningJobs()
 
-    # Override handleMethod to interpret the given method name as a queue priority
+    # Override handleMethod to forward the queue method to handleQueue
     handleMethod: (client_id, message) ->
         if message.method == 'queue'
             @handleQueue client_id, message
@@ -64,14 +61,14 @@ class QueueService extends somata.Service
             method: message.args[2]
             args: message.args[3..]
             scheduled: new Date().getTime()
-        job.key = makeKeyForJob job
+
         #somata.log.i '[makeJob]', job
         return job
 
     # Add a job to the queue
     queue: (client_id, job) ->
-        if !@queued_jobs[job.key]?
-            @queued_jobs[job.key] = job
+        # if !@queued_jobs[job.message_id]?
+        @queued_jobs[job.message_id] = job
 
     # Check jobs at an interval
     startRunningJobs: ->
