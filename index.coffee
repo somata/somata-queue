@@ -41,14 +41,11 @@ class QueueService extends somata.Service
     # Override handleMethod to forward the queue method to handleQueue
     handleMethod: (client_id, message) ->
         if message.method == 'queue'
-            @handleQueue client_id, message
+            @queue client_id, message
+        else if message.method == 'queued'
+            @queued client_id, message
         else
             super
-
-    handleQueue: (client_id, message) ->
-        job = @makeJob client_id, message
-        @queue client_id, job
-        @afterQueue job if @afterQueue?
 
     # queue [{options}] [service] [method] [args...]
     makeJob: (client_id, message) ->
@@ -67,9 +64,15 @@ class QueueService extends somata.Service
         return job
 
     # Add a job to the queue
-    queue: (client_id, job) ->
-        # if !@queued_jobs[job.message_id]?
+    queue: (client_id, message) ->
+        job = @makeJob client_id, message
         @queued_jobs[job.message_id] = job
+        @afterQueue job if @afterQueue?
+
+    # Show queued jobs
+    queued: (client_id, message) ->
+        response = _.values @queued_jobs
+        @sendResponse client_id, message.id, response
 
     # Check jobs at an interval
     startRunningJobs: ->
