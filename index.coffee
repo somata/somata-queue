@@ -61,6 +61,7 @@ class QueueService extends somata.Service
             method: message.args[2]
             args: message.args[3..]
             scheduled: new Date().getTime()
+            progress: 0
 
         #somata.log.i '[makeJob]', job
         return job
@@ -91,7 +92,7 @@ class QueueService extends somata.Service
     runJob: (job) ->
         #somata.log.s '[runJob] Running ' + util.inspect job, colors: true
         job.running = true
-        job.outgoing_id = @client.call job.service, job.method, job.args..., (err, response) =>
+        job.outgoing_id = @client.call job.service, job.method, job.message_id, job.args..., (err, response) =>
 
             # Re-run it if timed out
             # TODO: Add it to the end of the queue
@@ -100,7 +101,14 @@ class QueueService extends somata.Service
 
             else
                 @sendQueueResponse job, response
-                delete @queued_jobs[job.key]
+                delete @queued_jobs[job.message_id]
+
+            @client.unsubscribe progress_subscription
+
+        # Subscribe to progress messages from worker service
+        progress_subscription = @client.subscribe job.service, 'progress:'+job.message_id, (progress) =>
+            job.progress = progress
+            @publish 'progress:'+job.message_id, progress
 
     # Send a successful queue response
     sendQueueResponse: (job, response) ->
