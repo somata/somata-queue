@@ -11,13 +11,13 @@ bar = (p) ->
     [0...n].map(-> '#').join('') + [0...ln].map(-> '_').join('')
 
 sendRequest = (n, cb) ->
-    showProgress = (progress) ->
+    showProgress = ({progress}) ->
         process.stdout.clearLine()
         process.stdout.cursorTo 0
         process.stdout.write "[#{sent_id}] / " + bar progress
 
     sent_id = client.remote 'queue', 'queue', {priority: 'low'}, 'waiter', 'wait', n*5000, (err, response) ->
-        showProgress 1
+        showProgress {progress: 1}
         console.log ' ' + response
         client.unsubscribe progress_subscription
         cb err, response

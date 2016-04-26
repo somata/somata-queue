@@ -113,9 +113,9 @@ class QueueService extends somata.Service
             @client.unsubscribe job.subscription
 
         # Subscribe to progress messages from worker service
-        job.subscription = @client.subscribe job.service, 'progress:' + job.message_id, (progress) =>
-            job.progress = progress
-            @publish 'progress:' + job.message_id, progress
+        job.subscription = @client.subscribe job.service, 'progress:' + job.message_id, (job_update) =>
+            _.extend job, job_update
+            @publish 'progress:' + job.message_id, job_update
 
     cancel: (client_id, message) ->
         job_id = message.args[0]

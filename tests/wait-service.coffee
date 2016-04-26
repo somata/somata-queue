@@ -16,7 +16,7 @@ service = new somata.Service 'waiter',
                 now = new Date().getTime()
                 p = (now - start) / t
                 console.log job_id, p
-                service.publish 'progress:' + job_id, p
+                service.publish 'progress:' + job_id, {progress: p}
                 setTimeout progress, 500
 
         setTimeout done, t
