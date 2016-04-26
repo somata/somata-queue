@@ -69,6 +69,7 @@ class QueueService extends somata.Service
     queue: (client_id, message) ->
         job = @makeJob client_id, message
         @queued_jobs[job.message_id] = job
+        @publish 'queue:' + job.message_id, job
         @afterQueue job if @afterQueue?
 
     # Show queued jobs
@@ -111,9 +112,9 @@ class QueueService extends somata.Service
             @client.unsubscribe job.subscription
 
         # Subscribe to progress messages from worker service
-        job.subscription = @client.subscribe job.service, 'progress:'+job.message_id, (progress) =>
+        job.subscription = @client.subscribe job.service, 'progress:' + job.message_id, (progress) =>
             job.progress = progress
-            @publish 'progress:'+job.message_id, progress
+            @publish 'progress:' + job.message_id, progress
 
     cancel: (client_id, message) ->
         job_id = message.args[0]
@@ -124,7 +125,7 @@ class QueueService extends somata.Service
         if job = @queued_jobs[job_id]
             delete @queued_jobs[job_id]
             @client.unsubscribe job.subscription
-            @publish 'cancel:'+job.message_id
+            @publish 'cancel:' + job.message_id
             cb null, true
 
         else
