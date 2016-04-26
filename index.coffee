@@ -107,6 +107,7 @@ class QueueService extends somata.Service
 
             else
                 @sendQueueResponse job, response
+                @publish 'done:' + job.message_id, response
                 delete @queued_jobs[job.message_id]
 
             @client.unsubscribe job.subscription
