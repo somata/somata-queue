@@ -69,7 +69,7 @@ class QueueService extends somata.Service
     queue: (client_id, message) ->
         job = @makeJob client_id, message
         @queued_jobs[job.message_id] = job
-        @publish 'queue:' + job.message_id, job
+        @publish 'queue', job
         @afterQueue job if @afterQueue?
 
     # Show queued jobs
