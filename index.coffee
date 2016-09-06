@@ -9,6 +9,8 @@ DEFAULT_JOB_INTERVAL = parseInt(process.env.SOMATA_JOB_INTERVAL) || 1000
 PRIORITY_NAMES = ['low', 'normal', 'high']
 PRIORITIES = _.object PRIORITY_NAMES.map (n, i) -> [n, i]
 
+USE_PROGRESS = false
+
 # Filtering and sorting helpers
 isRunning = (job) -> job.running
 isRunnable = (job) -> job.scheduled <= new Date().getTime() && !isRunning job
@@ -62,7 +64,7 @@ class QueueService extends somata.Service
             scheduled: new Date().getTime()
             progress: 0
 
-        #somata.log.i '[makeJob]', job
+        somata.log.i '[makeJob]', job
         return job
 
     # Add a job to the queue
@@ -98,7 +100,11 @@ class QueueService extends somata.Service
     runJob: (job) ->
         #somata.log.s '[runJob] Running ' + util.inspect job, colors: true
         job.running = true
-        job.outgoing_id = @client.call job.service, job.method, job.message_id, job.args..., (err, response) =>
+
+        super_args = [job.service, job.method]
+        super_args.push job.message_id if USE_PROGRESS
+
+        job.outgoing_id = @client.call super_args..., job.args..., (err, response) =>
 
             # Re-run it if timed out
             # TODO: Add it to the end of the queue
@@ -110,12 +116,14 @@ class QueueService extends somata.Service
                 @publish 'done:' + job.message_id, response
                 delete @queued_jobs[job.message_id]
 
-            @client.unsubscribe job.subscription
+            if USE_PROGRESS
+                @client.unsubscribe job.subscription
 
-        # Subscribe to progress messages from worker service
-        job.subscription = @client.subscribe job.service, 'progress:' + job.message_id, (job_update) =>
-            _.extend job, job_update
-            @publish 'progress:' + job.message_id, job_update
+        if USE_PROGRESS
+            # Subscribe to progress messages from worker service
+            job.subscription = @client.subscribe job.service, 'progress:' + job.message_id, (job_update) =>
+                _.extend job, job_update
+                @publish 'progress:' + job.message_id, job_update
 
     cancel: (client_id, message) ->
         job_id = message.args[0]
